@@ -31,14 +31,16 @@ https://github.com/user-attachments/assets/83ccdd6e-124f-4325-97ef-ea5dd99ef03d
 
 ## What it does
 
-`/dalton-michael Should I pivot my startup?` and about half a minute later:
+Dalton Caldwell and Michael Seibel are two of the best startup advisors out there. Both spent years as partners at Y Combinator, running office hours with founders. What if they were sitting in the room with you?
+
+This skill lets you ask them directly. It answers from the startup advice they've given on camera: **106 videos, about 32 hours**, from YC's *Dalton & Michael* series (2019 to 2024), their own *Dalton + Michael* channel (2025 onward), and 18 solo YC talks.
+
+For example, type `/dalton-michael Should I pivot my startup?` and about half a minute later:
 
 - **A reel plays beside your chat.** A "great question" cold open, a smash cut into the episode where they cover it, then 3 to 6 moments where they actually answer, with a beat title over each one and live word-by-word captions.
 - **Claude answers in chat.** A one-line verdict and a few bullets, one per point they made.
 - **Nobody puts words in their mouths.** Every line attributed to Dalton or Michael is a real clip at a real timestamp. Claude writes the titles and the summary, and they're labelled as Claude's.
 - **Silly questions get the answer they deserve.** Ask whether eating pizza gets you more customers and you get five seconds of "No." from them.
-
-It searches every video of YC's *Dalton & Michael* series (2019 to 2024), their own *Dalton + Michael* channel (2025 onward), and 18 solo YC talks by one of them: **106 videos, about 32 hours**.
 
 ## Install
 
