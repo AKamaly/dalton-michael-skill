@@ -13,7 +13,9 @@ Question in, reel out. **Be fast:** about four tool calls, no narration, no veri
 
 Corpus: 106 videos, ~32 hours (YC's Dalton & Michael series 2019-2024, their own channel 2025+, 18 solo YC talks).
 
-**First run.** If a command says there is no transcript index yet, tell the user in one line, then start `python3 ~/.claude/skills/dalton-michael/scripts/dm.py ingest` in the background (about 30 minutes; it needs `yt-dlp`, which `brew install yt-dlp` or `pip install yt-dlp` provides). Answer once it finishes.
+The skill lives at `~/.claude/skills/dalton-michael` (if it was installed elsewhere, use the base directory shown above in every path below).
+
+**First run, or anything fails.** Run `python3 ~/.claude/skills/dalton-michael/scripts/dm.py doctor`. It checks Python, yt-dlp, the index and the player port, and prints the exact fix for each problem; apply the fixes. If the index is missing, start it in the background with `python3 ~/.claude/skills/dalton-michael/scripts/dm.py ingest > ~/.claude/skills/dalton-michael/data/ingest.log 2>&1 &` (it won't start twice). It becomes searchable after about 5 minutes and finishes in about 30. Meanwhile, if one of the sample reels (`dm.py samples`) matches the question, play it, and say in one line that it's a sample and the full index is still building. If the index is only partly built, answer from what's there and say so in one line.
 
 ## Silly questions: skip everything
 

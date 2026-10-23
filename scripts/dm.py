@@ -2,7 +2,9 @@
 """Dalton + Michael advisor: transcript index, search, and reel builder.
 
 Commands:
-  ingest              fetch episode lists + word-timed captions (skips what exists)
+  doctor              check the setup and print the fix for anything missing
+  samples             list the sample reels that work before the index exists
+  ingest [--limit N]  fetch episode lists + word-timed captions (skips what exists)
   index               (re)build the sqlite search index from captions
   find Q1 [Q2 ...] [-n N]  several queries at once, hits as timestamped sentences
   search QUERY [-n N] ranked transcript passages for a question
@@ -16,6 +18,7 @@ Commands:
 import json
 import os
 import re
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -30,7 +33,12 @@ META = DATA / "videos.json"
 DB = DATA / "index.sqlite"
 PLAYER = ROOT / "player"
 REELS = PLAYER / "reels"
-PORT = 8765
+SAMPLES = PLAYER / "samples"
+LOCK = DATA / "ingest.lock"
+PORT = int(os.environ.get("DM_PORT", "8765"))
+# set to chrome/firefox/safari/... when YouTube asks yt-dlp to "confirm you're not a bot"
+COOKIES = os.environ.get("DM_COOKIES_FROM_BROWSER", "")
+YTDLP = []   # resolved by ytdlp() when ingest starts
 
 SOURCES = [
     # Their own channel (2025+, after YC; Standard Capital era)
@@ -151,9 +159,31 @@ def clean(text):
 
 # ---------- ingest ----------
 
+def ytdlp():
+    """yt-dlp as a command: the binary if it's on PATH, else the pip-installed module."""
+    if shutil.which("yt-dlp"):
+        cmd = ["yt-dlp"]
+    elif subprocess.run([sys.executable, "-m", "yt_dlp", "--version"], capture_output=True).returncode == 0:
+        cmd = [sys.executable, "-m", "yt_dlp"]
+    else:
+        sys.exit("yt-dlp isn't installed. Install it, then run ingest again:\n"
+                 "  brew install yt-dlp        (macOS)\n"
+                 "  python3 -m pip install --user yt-dlp   (anywhere)")
+    return cmd + (["--cookies-from-browser", COOKIES] if COOKIES else [])
+
+
+def ingest_running():
+    """Another ingest holds the lock if its pid is still alive."""
+    try:
+        os.kill(int(LOCK.read_text().strip()), 0)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def list_source(url):
     r = subprocess.run(
-        ["yt-dlp", "--flat-playlist", "--print", "%(id)s|%(title)s|%(duration)s", url],
+        YTDLP + ["--flat-playlist", "--print", "%(id)s|%(title)s|%(duration)s", url],
         capture_output=True, text=True)
     rows = []
     for line in r.stdout.splitlines():
@@ -164,7 +194,21 @@ def list_source(url):
 
 
 def cmd_ingest(args):
+    """ingest [--limit N]: fetch what's missing; the index refreshes as it goes, so search works early."""
+    global YTDLP
+    YTDLP = ytdlp()
+    limit = int(args[args.index("--limit") + 1]) if "--limit" in args else None
     CAPS.mkdir(parents=True, exist_ok=True)
+    if ingest_running():
+        sys.exit("An ingest is already running (pid %s). Progress: %s" % (LOCK.read_text().strip(), DATA / "ingest.log"))
+    LOCK.write_text(str(os.getpid()))
+    try:
+        _ingest(limit)
+    finally:
+        LOCK.unlink(missing_ok=True)
+
+
+def _ingest(limit):
     meta = load_meta()
     for source, url in SOURCES:
         rows = list_source(url)
@@ -178,12 +222,13 @@ def cmd_ingest(args):
         meta.setdefault(vid, {}).update({"id": vid, "source": "YC talk", "speaker": speaker})
     save_meta(meta)
 
-    todo = [v for v in meta if not caption_file(v)]
-    print("captions missing: %d" % len(todo))
+    todo = [v for v in meta if not caption_file(v)][:limit]
+    print("captions to fetch: %d (about %d min; YouTube rate-limits caption downloads)"
+          % (len(todo), round(len(todo) * 9 / 60)), flush=True)
     for i, vid in enumerate(todo):
         for attempt in range(4):
             r = subprocess.run(
-                ["yt-dlp", "--skip-download", "--write-auto-subs", "--sub-langs", "en-orig",
+                YTDLP + ["--skip-download", "--write-auto-subs", "--sub-langs", "en-orig",
                  "--sub-format", "json3", "-o", str(CAPS / "%(id)s.%(ext)s"),
                  "--print", "%(upload_date)s|%(channel)s|%(duration)s|%(title)s", "--no-simulate",
                  "https://www.youtube.com/watch?v=" + vid],
@@ -204,7 +249,7 @@ def cmd_ingest(args):
                 continue
             # no en-orig auto track (older uploads): try the uploaded English subs
             subprocess.run(
-                ["yt-dlp", "--skip-download", "--write-subs", "--sub-langs", "en.*",
+                YTDLP + ["--skip-download", "--write-subs", "--sub-langs", "en.*",
                  "--sub-format", "json3", "-o", str(CAPS / "%(id)s.%(ext)s"),
                  "https://www.youtube.com/watch?v=" + vid],
                 capture_output=True, text=True)
@@ -212,25 +257,31 @@ def cmd_ingest(args):
         ok = "ok" if caption_file(vid) else "MISSING"
         print("[%d/%d] %s %s  %s" % (i + 1, len(todo), vid, ok, meta[vid].get("title", "")), flush=True)
         save_meta(meta)
+        if (i + 1) % 12 == 0:
+            cmd_index([])        # searchable early; the full set lands at the end
         time.sleep(4)
     # upload dates for anything captioned outside this loop
     for vid in [v for v in meta if caption_file(v) and not meta[v].get("upload_date")]:
-        r = subprocess.run(["yt-dlp", "--skip-download", "--print", "%(upload_date)s|%(channel)s",
-                            "https://www.youtube.com/watch?v=" + vid], capture_output=True, text=True)
+        r = subprocess.run(YTDLP + ["--skip-download", "--print", "%(upload_date)s|%(channel)s",
+                                    "https://www.youtube.com/watch?v=" + vid], capture_output=True, text=True)
         line = (r.stdout.strip().splitlines() or [""])[-1]
         if "|" in line:
             meta[vid]["upload_date"], meta[vid]["channel"] = line.split("|")
         save_meta(meta)
-    cmd_index(args)
+    cmd_index([])
+    missing = [m.get("title", v) for v, m in meta.items() if not caption_file(v)]
+    if missing:
+        print("%d videos still have no captions; run ingest again later to retry them." % len(missing))
 
 
 # ---------- index ----------
 
 def cmd_index(args):
     meta = load_meta()
-    if DB.exists():
-        DB.unlink()
-    con = sqlite3.connect(DB)
+    # build beside the live index and swap it in, so searches during an ingest never see it half-built
+    tmp = DB.with_suffix(".building")
+    tmp.unlink(missing_ok=True)
+    con = sqlite3.connect(tmp)
     con.executescript("""
       create table sent(video text, i int, start real, end real, text text);
       create virtual table seg using fts5(title, text, video unindexed, start unindexed,
@@ -262,7 +313,9 @@ def cmd_index(args):
             step = max(1, (j - i) // 2)
             i += step
     con.commit()
-    print("indexed %d videos, %d passages" % (nvid, nseg))
+    con.close()
+    os.replace(tmp, DB)
+    print("indexed %d videos, %d passages" % (nvid, nseg), flush=True)
 
 
 # ---------- search / show ----------
@@ -529,6 +582,60 @@ def cmd_stats(args):
     missing = [m.get("title", v) for v, m in meta.items() if not caption_file(v)]
     if missing:
         print("no captions: " + "; ".join(missing))
+
+
+def cmd_samples(args):
+    """Reels that ship with the repo, playable before the index exists."""
+    for r in json.loads((SAMPLES / "index.json").read_text()):
+        print("%-48s %s" % (r["slug"], r["question"]))
+    print("\nPlay one: %s/?reel=<slug>&autoplay=1" % ensure_server())
+
+
+def cmd_doctor(args):
+    """Check everything the skill needs; print the fix for anything missing."""
+    import urllib.request
+    me = Path(__file__).resolve()
+    problems = []
+
+    def check(good, what, fix=""):
+        print(("  ok   " if good else "  FIX  ") + what)
+        if not good:
+            problems.append(fix)
+            print("       " + fix.replace("\n", "\n       "))
+
+    print("Dalton + Michael: checking your setup\n")
+    check(sys.version_info >= (3, 9), "Python %d.%d" % sys.version_info[:2], "Install Python 3.9 or newer.")
+    try:
+        sqlite3.connect(":memory:").execute("create virtual table t using fts5(x)")
+        check(True, "SQLite full-text search (FTS5)")
+    except sqlite3.Error:
+        check(False, "SQLite full-text search (FTS5)", "Use a Python with FTS5, e.g. Homebrew's python3.")
+    has_ytdlp = bool(shutil.which("yt-dlp")) or subprocess.run(
+        [sys.executable, "-m", "yt_dlp", "--version"], capture_output=True).returncode == 0
+    check(has_ytdlp, "yt-dlp", "brew install yt-dlp    or    python3 -m pip install --user yt-dlp")
+
+    meta = load_meta()
+    have = sum(1 for v in meta if caption_file(v))
+    if ingest_running():
+        check(True, "transcript index: building now, %d of %d videos so far (log: %s)" % (have, len(meta), DATA / "ingest.log"))
+    elif DB.exists():
+        nv = sqlite3.connect(DB).execute("select count(distinct video) from sent").fetchone()[0]
+        check(nv > 0, "transcript index: %d videos searchable" % nv, "python3 %s ingest" % me)
+        if 0 < have < len(meta):
+            print("       %d videos have no captions yet; running ingest again retries them." % (len(meta) - have))
+    else:
+        check(False, "transcript index", "Build it once (about 30 minutes, in the background):\n"
+              "python3 %s ingest > %s 2>&1 &" % (me, DATA / "ingest.log"))
+
+    if port_open():
+        try:
+            urllib.request.urlopen("http://127.0.0.1:%d/samples/index.json" % PORT, timeout=2)
+            check(True, "player server on port %d" % PORT)
+        except Exception:
+            check(False, "player port %d is taken by another app" % PORT, "Pick another port: export DM_PORT=8766")
+    else:
+        check(True, "player port %d free (starts on first reel)" % PORT)
+    print("\nAll good." if not problems else "\n%d thing(s) to fix above." % len(problems))
 
 
 def main():

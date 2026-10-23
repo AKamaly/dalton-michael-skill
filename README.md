@@ -44,29 +44,64 @@ For example, type `/dalton-michael Should I pivot my startup?` and about half a 
 
 ## Install
 
-You need [Claude Code](https://claude.com/claude-code) (the desktop app plays reels in its built-in browser pane; the CLI opens your default browser), Python 3.9+, and [yt-dlp](https://github.com/yt-dlp/yt-dlp).
+One line, on macOS or Linux:
 
-**1. Clone it into your skills folder**
+```bash
+curl -fsSL https://raw.githubusercontent.com/AKamaly/dalton-michael-skill/main/install.sh | bash
+```
+
+It takes about a minute:
+
+1. Checks you have Python 3.9+ (nothing else to install from pip).
+2. Puts the skill in `~/.claude/skills/dalton-michael`, where Claude Code finds it.
+3. Installs [yt-dlp](https://github.com/yt-dlp/yt-dlp) if it's missing (Homebrew, or pip as a fallback). It fetches captions only, never video.
+4. Starts building the transcript index in the background. It's searchable after about 5 minutes and complete in about 30, because YouTube rate-limits caption downloads.
+5. Opens a sample answer in your browser, so you can see it working right away.
+
+Then, in [Claude Code](https://claude.com/claude-code), ask:
+
+```
+/dalton-michael Should I pivot my startup?
+```
+
+Restart Claude Code if it was open while you installed. The desktop app plays the reel in its built-in browser pane, next to your chat; the CLI opens it in your default browser.
+
+<details>
+<summary>Prefer to do it by hand?</summary>
 
 ```bash
 git clone https://github.com/AKamaly/dalton-michael-skill ~/.claude/skills/dalton-michael
 ```
 
-**2. Install yt-dlp**
-
 ```bash
 brew install yt-dlp
 ```
-
-(or `pip install yt-dlp`)
-
-**3. Build the transcript index (once)**
 
 ```bash
 python3 ~/.claude/skills/dalton-michael/scripts/dm.py ingest
 ```
 
-This takes about 30 minutes the first time, because YouTube rate-limits caption downloads and the script backs off politely. It downloads captions only, never video. Run it again whenever you want new episodes; it skips what it already has.
+</details>
+
+### Something not working?
+
+```bash
+python3 ~/.claude/skills/dalton-michael/scripts/dm.py doctor
+```
+
+It checks Python, yt-dlp, the index and the player port, and prints the exact fix for anything missing. Claude runs it on its own when something fails. Common fixes:
+
+- **YouTube asks yt-dlp to "confirm you're not a bot".** Let yt-dlp use your browser's YouTube cookies: `export DM_COOKIES_FROM_BROWSER=chrome` (or `safari`, `firefox`), then run `ingest` again.
+- **Captions fail for a few videos.** YouTube rate-limits; run `ingest` again later and it retries only what's missing. Keeping yt-dlp current helps: `brew upgrade yt-dlp`.
+- **Port 8765 is taken.** `export DM_PORT=8766`.
+
+### Update or remove
+
+```bash
+cd ~/.claude/skills/dalton-michael && git pull && python3 scripts/dm.py ingest
+```
+
+The `ingest` at the end picks up any new episodes. To uninstall, delete `~/.claude/skills/dalton-michael`.
 
 ## Usage
 
@@ -88,7 +123,7 @@ or just say *"ask Dalton and Michael: should I raise or bootstrap?"*.
 
 Add your own context for a sharper cut: *"We have 3 pilots and none convert to paid. Am I undercharging?"* After it plays, steer it: *"make it shorter"*, *"only the 2026 episodes"*, *"show me where they disagree"*.
 
-Every reel you make stays in the player's history menu.
+Every reel you make stays in the player's history menu, next to five sample answers that ship with the skill.
 
 ## How it works
 
@@ -117,6 +152,8 @@ All commands are `python3 ~/.claude/skills/dalton-michael/scripts/dm.py <command
 
 | Command | What it does |
 |---|---|
+| `doctor` | Check the setup and print the fix for anything missing |
+| `samples` | Sample answers that play before the index exists |
 | `find Q1 Q2 ... [-n N]` | Several queries at once, hits as timestamped sentences |
 | `show VIDEO 4:10 5:20` | Read any window of a transcript |
 | `reel spec.json` | Build a reel from a list of clips and print its URL |
@@ -132,6 +169,8 @@ SKILL.md              the instructions Claude follows
 scripts/dm.py         index, search, reel builder, local server (stdlib only)
 player/index.html     the reel player
 data/reactions.json   curated cold opens and "No." clips
+player/samples/       five sample answers (no transcript text)
+install.sh            the one-line installer
 docs/                 icon, demo video, preview GIF
 ```
 
@@ -156,7 +195,7 @@ Delete that file to turn it off. The demo above was recorded on macOS with [Reco
 
 ## Disclaimer
 
-This is an unofficial fan project. It isn't affiliated with or endorsed by Dalton Caldwell, Michael Seibel, Y Combinator, or Standard Capital. All video belongs to its owners and plays from YouTube. Transcripts are fetched by each user locally and never redistributed here.
+This is an unofficial fan project. It isn't affiliated with or endorsed by Dalton Caldwell, Michael Seibel, Y Combinator, or Standard Capital. All video belongs to its owners and plays from YouTube. Transcripts are fetched by each user locally and never redistributed here; the sample answers contain only video IDs, timestamps and Claude's own titles.
 
 Thank you, Dalton and Michael, for years of free office hours.
 

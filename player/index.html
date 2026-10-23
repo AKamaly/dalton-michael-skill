@@ -188,19 +188,22 @@ const autoplay = new URLSearchParams(location.search).get("autoplay") === "1";
 
 // ---------- load ----------
 async function boot() {
-  let index = [];
-  try { index = await (await fetch("reels/index.json", { cache: "no-store" })).json(); } catch (e) {}
+  // your reels first, then the samples that ship with the repo
+  const load = async path => { try { return await (await fetch(path, { cache: "no-store" })).json(); } catch (e) { return []; } };
+  const mine = await load("reels/index.json"), samples = await load("samples/index.json");
+  const index = [...mine, ...samples.filter(s => !mine.some(m => m.slug === s.slug))];
   const want = new URLSearchParams(location.search).get("reel") || (index[0] && index[0].slug);
   const hist = $("#history");
   hist.innerHTML = index.length
-    ? index.map(r => `<option value="${esc(r.slug)}" ${r.slug === want ? "selected" : ""}>${esc(r.question)}</option>`).join("")
+    ? index.map(r => `<option value="${esc(r.slug)}" ${r.slug === want ? "selected" : ""}>${esc(r.question)}${r.sample ? " (sample)" : ""}</option>`).join("")
     : '<option>No questions yet</option>';
   hist.onchange = () => { location.search = "?reel=" + encodeURIComponent(hist.value); };
   if (!want) {
     $("#app").innerHTML = '<div class="empty">Ask Claude a startup question with <code>/dalton-michael</code> and the answer plays here.</div>';
     return;
   }
-  reel = await (await fetch("reels/" + want + ".json", { cache: "no-store" })).json();
+  reel = await load("reels/" + want + ".json");
+  if (!reel.clips) reel = await load("samples/" + want + ".json");
   document.title = reel.question + " · Dalton + Michael";
   render();
   loadApi();
@@ -554,7 +557,7 @@ function showBanner(i) {
 function hideCard() {
   if (state !== "playing") return;
   $("#card").className = "card";
-  $("#caption").classList.add("on");
+  $("#caption").classList.toggle("on", reel.clips[cur].lines.length > 0);   // samples ship without captions
   showBanner(cur);
 }
 

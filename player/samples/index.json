@@ -1,0 +1,37 @@
+[
+ {
+  "slug": "should-i-pivot-my-startup",
+  "question": "Should I pivot my startup?",
+  "clips": 7,
+  "duration": 185.3,
+  "sample": true
+ },
+ {
+  "slug": "how-do-i-sell-to-customers",
+  "question": "How do I sell to customers?",
+  "clips": 9,
+  "duration": 271.4,
+  "sample": true
+ },
+ {
+  "slug": "should-i-bootstrap-or-raise-vc",
+  "question": "Should I bootstrap or raise VC?",
+  "clips": 6,
+  "duration": 190.7,
+  "sample": true
+ },
+ {
+  "slug": "will-claude-kill-my-startup",
+  "question": "Will Claude kill my startup?",
+  "clips": 6,
+  "duration": 188.5,
+  "sample": true
+ },
+ {
+  "slug": "silly-does-eating-pizza-get-me-more-customers",
+  "question": "Does eating pizza get me more customers?",
+  "clips": 2,
+  "duration": 5.7,
+  "sample": true
+ }
+]
