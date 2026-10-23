@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dalton + Michael</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111'/%3E%3Ctext x='32' y='43' font-family='Georgia' font-size='30' fill='%23ff6b35' text-anchor='middle'%3E+%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0b0c;
+    --panel: #141416;
+    --panel-2: #1b1b1e;
+    --line: #26262a;
+    --text: #f2efe9;
+    --muted: #9a968f;
+    --dim: #5e5b56;
+    --accent: #ff6b35;
+    --serif: "Instrument Serif", Georgia, serif;
+    --sans: Inter, system-ui, -apple-system, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); }
+  body { min-height: 100vh; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  a { color: inherit; }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 18px 16px 48px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .mark { font-weight: 600; letter-spacing: .14em; font-size: 12px; text-transform: uppercase; }
+  .mark b { color: var(--accent); font-weight: 600; }
+  .mark span { color: var(--muted); font-weight: 500; letter-spacing: .08em; margin-left: 10px; }
+  select.history {
+    background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 10px; font: 12px var(--sans); max-width: 46vw;
+  }
+
+  .ask { margin: 22px 0 18px; }
+  .ask small { color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+  .ask h1 { font: 400 clamp(30px, 5vw, 52px)/1.05 var(--serif); margin: 6px 0 0; letter-spacing: -.01em; }
+
+  .grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  @media (min-width: 1100px) { .grid { grid-template-columns: minmax(0, 1fr) 360px; } }
+
+  /* stage */
+  /* clip, not hidden: the YouTube iframe can otherwise scroll the stage and shift the picture */
+  .stage { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 14px; overflow: clip; }
+  /* the iframe is taller than 16:9, so YouTube letterboxes the video and parks its title bar
+     and logo in the bars, which the stage crops away */
+  .stage iframe { position: absolute; left: 0; top: -80px; width: 100%; height: calc(100% + 160px); pointer-events: none; }
+  /* the standby player sits underneath, fully rendered: an opacity-0 iframe freezes YouTube's
+     pause animation, which then shows up mid-clip after the swap */
+  .stage iframe { z-index: 1; }
+  .stage iframe.off { z-index: 0; }
+  .hit { position: absolute; inset: 0; z-index: 2; }
+  /* the beat, over the top of the picture while the clip keeps playing */
+  .banner {
+    position: absolute; left: 0; right: 0; top: 0; z-index: 3; padding: 16px 22px 44px;
+    background: linear-gradient(to bottom, rgba(0,0,0,.8), rgba(0,0,0,0));
+    opacity: 0; transform: translateY(-6px); transition: opacity .35s ease, transform .35s ease; pointer-events: none;
+  }
+  .banner.on { opacity: 1; transform: none; }
+  .banner .k { font: 500 11px var(--mono); color: var(--accent); letter-spacing: .1em; }
+  .banner b { display: block; font: 400 clamp(20px, 3.2vw, 34px)/1.1 var(--serif); margin-top: 4px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+  .banner span { display: block; font-size: 12px; color: rgba(242,239,233,.72); margin-top: 6px; }
+
+  .caption {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 48px 6% 22px;
+    background: linear-gradient(to top, rgba(0,0,0,.82), rgba(0,0,0,0));
+    font: 500 clamp(15px, 2.1vw, 22px)/1.35 var(--sans); text-align: center; text-wrap: balance;
+    opacity: 0; transition: opacity .25s; text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  }
+  .caption.on { opacity: 1; }
+  .caption .w { color: rgba(242,239,233,.42); transition: color .12s; }
+  .caption .w.said { color: var(--text); }
+
+  .card {
+    position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; justify-content: center;
+    padding: 6% 8%; background: radial-gradient(120% 90% at 20% 10%, #1d1d21 0%, #0b0b0c 60%);
+    opacity: 0; pointer-events: none; transition: opacity .35s ease;
+  }
+  .card.on { opacity: 1; pointer-events: auto; }
+  .card.blank { background: #000; transition: opacity .12s; }
+  .stage { container-type: inline-size; }
+  .mark { white-space: nowrap; }
+  select.history { min-width: 0; }
+  @media (max-width: 520px) { .mark span { display: none; } select.history { max-width: 40vw; } }
+  .card .k { font: 500 12px var(--mono); color: var(--accent); letter-spacing: .1em; }
+  .card h2 { font: 400 clamp(28px, 5.4vw, 64px)/1.02 var(--serif); margin: 10px 0 14px; letter-spacing: -.01em; }
+  .card h2 i { color: var(--accent); }
+  .card p { margin: 0; color: var(--muted); font-size: clamp(12px, 1.5vw, 15px); }
+  .card .go {
+    margin-top: 26px; align-self: flex-start; display: inline-flex; align-items: center; gap: 10px;
+    background: var(--text); color: #0b0b0c; padding: 12px 20px 12px 16px; border-radius: 999px; font-weight: 600; font-size: 15px;
+    transition: transform .15s;
+  }
+  .card .go:hover { transform: translateY(-1px); }
+  .card .go svg { width: 18px; height: 18px; }
+  .card .bar { height: 2px; background: var(--line); margin-top: 22px; width: min(320px, 60%); border-radius: 2px; overflow: hidden; }
+  .card .bar div { height: 100%; width: 0; background: var(--accent); }
+  .card.loading .bar div { animation: fill 1.4s linear forwards; }
+  @keyframes fill { to { width: 100%; } }
+  .card .links { margin-top: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+  .card .links a { color: var(--muted); text-decoration: none; }
+  .card .links a:hover { color: var(--text); }
+  .card .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .card .ghost { margin-top: 26px; border: 1px solid var(--line); padding: 11px 18px; border-radius: 999px; font-weight: 500; }
+  @container (max-width: 560px) {
+    .card { padding: 14px 20px; }
+    .card h2 { font-size: 26px; margin: 6px 0 8px; }
+    .card p, .card .bar { display: none; }
+    .card .k { font-size: 10px; }
+    .card .go, .card .ghost { margin-top: 10px; padding: 9px 16px 9px 12px; font-size: 14px; }
+    .card .links { margin-top: 8px; font-size: 12px; }
+    .card .links a:nth-child(n+3) { display: none; }
+    .caption { font-size: 14px; padding: 30px 4% 12px; }
+    .banner { padding: 10px 14px 30px; }
+  }
+
+  /* transport */
+  .transport { margin-top: 12px; }
+  .segs { display: flex; gap: 3px; height: 6px; }
+  .segs button { position: relative; height: 100%; background: var(--line); border-radius: 3px; overflow: hidden; padding: 0; min-width: 6px; }
+  .segs button div { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--text); }
+  .segs button.cur div { background: var(--accent); }
+  .controls { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+  .controls .ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--text); }
+  .controls .ic:hover { background: var(--panel-2); }
+  .controls .ic svg { width: 18px; height: 18px; }
+  .controls .time { font: 12px var(--mono); color: var(--muted); margin-left: 6px; }
+  .controls .spacer { flex: 1; }
+  .controls a.yt { font-size: 12px; color: var(--muted); text-decoration: none; border: 1px solid var(--line); padding: 6px 10px; border-radius: 8px; }
+  .controls a.yt:hover { color: var(--text); }
+
+  /* side */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .panel + .panel { margin-top: 14px; }
+  .panel h3 { margin: 0 0 10px; font-size: 11px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; font-weight: 500; }
+  .clips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .clips button { width: 100%; text-align: left; display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; padding: 9px 8px; border-radius: 10px; align-items: start; }
+  .clips button:hover { background: var(--panel-2); }
+  .clips button.cur { background: var(--panel-2); }
+  .clips .n { font: 12px var(--mono); color: var(--dim); padding-top: 2px; }
+  .clips button.cur .n { color: var(--accent); }
+  .clips .b { font-size: 14px; font-weight: 500; line-height: 1.3; }
+  .clips .s { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+  .clips .d { font: 12px var(--mono); color: var(--dim); padding-top: 2px; }
+  .verdict { font: 400 22px/1.2 var(--serif); margin: 0 0 10px; }
+  .notes { margin: 0; padding-left: 18px; color: #d6d2cb; font-size: 14px; line-height: 1.5; }
+  .notes li + li { margin-top: 6px; }
+  .notes .ref { font: 11px var(--mono); color: var(--accent); cursor: pointer; margin-left: 2px; }
+  .fine { color: var(--dim); font-size: 11px; line-height: 1.5; margin-top: 12px; }
+  .empty { color: var(--muted); padding: 60px 0; text-align: center; }
+  .empty code { font-family: var(--mono); color: var(--text); }
+  kbd { font: 11px var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">Dalton <b>+</b> Michael<span>advisor</span></div>
+    <select class="history" id="history" aria-label="Past questions"></select>
+  </header>
+
+  <div id="app"></div>
+</div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const fmt = s => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const ICON = {
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5.5v13a1 1 0 0 0 1.5.86l11-6.5a1 1 0 0 0 0-1.72l-11-6.5A1 1 0 0 0 7 5.5z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+  prev: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 6.1v11.8a.9.9 0 0 1-1.4.75L10 12.75a.9.9 0 0 1 0-1.5l8.6-5.9a.9.9 0 0 1 1.4.75z"/></svg>',
+  next: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 6.1v11.8a.9.9 0 0 0 1.4.75L14 12.75a.9.9 0 0 0 0-1.5L5.4 5.35A.9.9 0 0 0 4 6.1z"/></svg>',
+  replay: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+};
+
+let reel = null, player = null, apiReady = false;
+let cur = -1, state = "idle";       // idle | card | playing | paused | ended
+let primed = false, loadStarted = 0, lastWordIdx = -1, lastT = -1, lastMove = 0;
+// Claude opens a fresh reel with ?autoplay=1; the history menu opens reels on the Play screen
+const autoplay = new URLSearchParams(location.search).get("autoplay") === "1";
+
+// ---------- load ----------
+async function boot() {
+  let index = [];
+  try { index = await (await fetch("reels/index.json", { cache: "no-store" })).json(); } catch (e) {}
+  const want = new URLSearchParams(location.search).get("reel") || (index[0] && index[0].slug);
+  const hist = $("#history");
+  hist.innerHTML = index.length
+    ? index.map(r => `<option value="${esc(r.slug)}" ${r.slug === want ? "selected" : ""}>${esc(r.question)}</option>`).join("")
+    : '<option>No questions yet</option>';
+  hist.onchange = () => { location.search = "?reel=" + encodeURIComponent(hist.value); };
+  if (!want) {
+    $("#app").innerHTML = '<div class="empty">Ask Claude a startup question with <code>/dalton-michael</code> and the answer plays here.</div>';
+    return;
+  }
+  reel = await (await fetch("reels/" + want + ".json", { cache: "no-store" })).json();
+  document.title = reel.question + " · Dalton + Michael";
+  render();
+  loadApi();
+}
+
+function render() {
+  const n = reel.clips.length;
+  const eps = new Set(reel.clips.map(c => c.video)).size;
+  $("#app").innerHTML = `
+    <div class="grid">
+      <div>
+        <div class="stage" id="stage">
+          <div id="yt0"></div><div id="yt1"></div>
+          <div class="hit" id="hit"></div>
+          <div class="banner" id="banner"></div>
+          <div class="caption" id="caption"></div>
+          <div class="card on" id="card">
+            <div class="k">Office hours · ${n} clips · ${fmt(reel.duration)} · ${eps} episode${eps > 1 ? "s" : ""}</div>
+            <h2>“${esc(reel.question)}”</h2>
+            <p>Their answer, cut together from the episodes where they actually talk about it.</p>
+            <button class="go" id="go">${ICON.play} Play the answer</button>
+          </div>
+        </div>
+        <div class="transport">
+          <div class="segs" id="segs">${reel.clips.map((c, i) =>
+            `<button data-i="${i}" style="flex:${Math.max(4, c.end - c.start)}" title="${esc(c.beat || c.title)}"><div></div></button>`).join("")}</div>
+          <div class="controls">
+            <button class="ic" id="prev" title="Previous clip (←)">${ICON.prev}</button>
+            <button class="ic" id="pp" title="Play / pause (space)">${ICON.play}</button>
+            <button class="ic" id="next" title="Next clip (→)">${ICON.next}</button>
+            <span class="time" id="time">0:00 / ${fmt(reel.duration)}</span>
+            <span class="spacer"></span>
+            <a class="yt" id="ytlink" target="_blank" rel="noopener">Full episode ↗</a>
+          </div>
+        </div>
+      </div>
+      <aside>
+        <div class="panel">
+          <h3>The cut</h3>
+          <ol class="clips" id="clips">${reel.clips.map((c, i) => `
+            <li><button data-i="${i}">
+              <span class="n">${String(i + 1).padStart(2, "0")}</span>
+              <span><div class="b">${esc(c.beat || c.title)}</div><div class="s">${esc(c.title)} · ${esc(c.year)}</div></span>
+              <span class="d">${fmt(c.end - c.start)}</span>
+            </button></li>`).join("")}</ol>
+        </div>
+        ${reel.verdict || (reel.notes && reel.notes.length) ? `
+        <div class="panel">
+          <h3>Claude's notes</h3>
+          ${reel.verdict ? `<p class="verdict">${esc(reel.verdict)}</p>` : ""}
+          <ul class="notes">${(reel.notes || []).map(t => `<li>${refs(esc(t))}</li>`).join("")}</ul>
+          <div class="fine">Notes are Claude's summary, not their words. Everything they say is in the clips, played from YouTube. Unofficial fan tool.</div>
+        </div>` : ""}
+        <div class="fine"><kbd>space</kbd> play/pause &nbsp; <kbd>←</kbd> <kbd>→</kbd> clips</div>
+      </aside>
+    </div>`;
+
+  $("#go").onclick = () => start(0);
+  $("#pp").onclick = toggle;
+  $("#hit").onclick = toggle;
+  $("#prev").onclick = () => jump(cur - 1);
+  $("#next").onclick = () => jump(cur + 1);
+  document.querySelectorAll("#segs button, #clips button").forEach(b => b.onclick = () => jump(+b.dataset.i));
+  document.querySelectorAll(".ref").forEach(r => r.onclick = () => jump(+r.dataset.i));
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "SELECT") return;
+    if (e.code === "Space") { e.preventDefault(); state === "idle" ? start(0) : toggle(); }
+    if (e.code === "ArrowRight") jump(cur + 1);
+    if (e.code === "ArrowLeft") jump(cur - 1);
+  });
+  reel.clips.forEach(c => c.lines = toLines(c.words));
+}
+
+// "[2]" in a note becomes a link to clip 2
+function refs(html) {
+  return html.replace(/\[(\d+)\]/g, (m, d) => `<span class="ref" data-i="${d - 1}">[${d}]</span>`);
+}
+
+// caption lines: sentence breaks, max ~14 words
+function toLines(words) {
+  const lines = []; let cur = [];
+  words.forEach((w, i) => {
+    if (w.turn && cur.length) { lines.push(cur); cur = []; }   // new speaker, new line
+    cur.push({ ...w, i });
+    if (/[.?!]$/.test(w.w) || cur.length >= 14) { lines.push(cur); cur = []; }
+  });
+  if (cur.length) lines.push(cur);
+  return lines;
+}
+
+// ---------- youtube ----------
+// Two players: one on screen, one hidden that buffers the next clip and holds at its first
+// frame, so a cut is a swap instead of a load.
+// YouTube shows a pause icon mid-picture for ~4.5s whenever playback starts, so the hidden player
+// starts rolling (muted, underneath) PREROLL seconds before the cut and the icon is gone by the swap.
+const PREROLL = 5;
+let players = [], active = 0, readyCount = 0;
+let prep = { slot: -1, i: -1, primed: false, rolling: false, from: 0 };
+
+function loadApi() {
+  window.onYouTubeIframeAPIReady = () => {
+    [0, 1].forEach(slot => {
+      const c = reel.clips[Math.min(slot, reel.clips.length - 1)];
+      players[slot] = new YT.Player("yt" + slot, {
+        videoId: c.video,
+        playerVars: { controls: 0, rel: 0, playsinline: 1, cc_load_policy: 0, iv_load_policy: 3,
+                      disablekb: 1, fs: 0, start: Math.floor(c.start), origin: location.origin },
+        events: {
+          onReady: () => { if (++readyCount === 2) { apiReady = true; showSlot(0); if (autoplay) startWhenSeen(); } },
+          onStateChange: e => onState(slot, e),
+          onError: e => onErr(slot, e),
+        },
+      });
+    });
+    player = players[0];
+  };
+  const s = document.createElement("script");
+  s.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(s);
+}
+
+// a reel in a background tab or a hidden pane goes quiet; otherwise the previous answer keeps
+// talking underneath the next one
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "hidden" || (state !== "playing" && state !== "card")) return;
+  players.forEach(p => { try { p.pauseVideo(); } catch (e) {} });
+  prep.rolling = false;
+  state = "paused";
+  paintPP();
+});
+
+// autoplay waits until the pane is on screen, so a reel never starts talking in a hidden pane
+function startWhenSeen() {
+  if (document.visibilityState === "visible") return start(0);
+  document.addEventListener("visibilitychange", function once() {
+    if (document.visibilityState !== "visible" || state !== "idle") return;
+    document.removeEventListener("visibilitychange", once);
+    start(0);
+  });
+}
+
+function showSlot(slot) {
+  players.forEach((p, k) => p.getIframe().classList.toggle("off", k !== slot));
+}
+
+function onErr(slot, e) {
+  if (slot !== active) { prep.i = -1; return; }   // the next clip failed to buffer; goTo will load it
+  console.warn("YouTube error", e.data, reel.clips[cur]);
+  setTimeout(() => jump(cur + 1), 800);           // unembeddable or removed: skip it
+}
+
+function onState(slot, e) {
+  if (e.data !== YT.PlayerState.PLAYING) return;
+  const p = players[slot];
+  try { p.unloadModule("captions"); p.unloadModule("cc"); } catch (err) {}
+  if (slot !== active) {
+    if (slot === prep.slot && prep.rolling) return;   // the pre-roll we started
+    // the hidden player has the next clip: hold it at the pre-roll point
+    p.pauseVideo();
+    if (slot === prep.slot && prep.i >= 0) { p.seekTo(prep.from, true); prep.primed = true; }
+    return;
+  }
+  if (state === "card" && !primed) {
+    p.pauseVideo();
+    p.seekTo(reel.clips[cur].start, true);
+    primed = true;
+  } else if (state === "playing") {
+    hideCard();
+  }
+}
+
+function prepare(j) {
+  if (j >= reel.clips.length || cur !== j - 1 || prep.i === j || (state !== "playing" && state !== "card")) return;
+  const slot = 1 - active, c = reel.clips[j];
+  // a short clip can't cover a full pre-roll; roll only as long as it lasts, or the hidden
+  // player lands short of the cut and has to seek forward at the swap
+  const room = reel.clips[j - 1].end - reel.clips[j - 1].start - 0.5;
+  prep = { slot, i: j, primed: false, rolling: false, from: Math.max(0, c.start - Math.min(PREROLL, Math.max(0, room))) };
+  players[slot].mute();
+  players[slot].loadVideoById({ videoId: c.video, startSeconds: prep.from });
+}
+
+// start the hidden player so it reaches the next cut point just as this clip ends
+function preroll(c, t) {
+  if (!prep.primed || prep.rolling || prep.i !== cur + 1) return;
+  const lead = reel.clips[prep.i].start - prep.from;
+  if (c.end - t > lead) return;
+  prep.rolling = true;
+  players[prep.slot].playVideo();
+}
+
+// ---------- playback ----------
+function start(i) {
+  if (!apiReady) { setTimeout(() => start(i), 150); return; }
+  // keep the question up, drop the button, while the first clip loads
+  const card = $("#card");
+  card.className = "card on loading";
+  card.innerHTML = `<div class="k">Office hours</div><h2>“${esc(reel.question)}”</h2><div class="bar"><div></div></div>`;
+  goTo(i);
+}
+
+// Every cut is a straight cut: the next clip is already buffered in the hidden player, so the
+// swap is instant. Black shows only when a clip still has to load (a jump, or a slow network).
+function goTo(i) {
+  if (i < 0 || i >= reel.clips.length) return;
+  const c = reel.clips[i];
+  cur = i; state = "card"; lastWordIdx = -1; bannerFor = -1;
+  loadStarted = performance.now();
+
+  const outgoing = player, slot = 1 - active;
+  const ready = prep.i === i && prep.slot === slot;
+  const rolled = ready && prep.rolling;
+  active = slot; player = players[slot];
+  if (ready) {
+    primed = prep.primed || rolled;   // still buffering is fine: onState primes it
+  } else {
+    primed = false;
+    player.mute();
+    player.loadVideoById({ videoId: c.video, startSeconds: c.start });
+  }
+  prep = { slot: -1, i: -1, primed: false };
+  outgoing.pauseVideo();
+  outgoing.mute();
+  if (!primed && !$("#card").classList.contains("on")) {
+    $("#card").className = "card on blank";
+    $("#card").innerHTML = "";
+  }
+  $("#banner").classList.remove("on");
+  $("#ytlink").href = c.url;
+  showSlot(slot);
+  if (rolled) begin(c);            // already playing underneath: just unmute, same frame
+  paintPP();
+  paintList();
+}
+
+function begin(c) {
+  state = "playing";
+  lastMove = performance.now();
+  if (Math.abs(player.getCurrentTime() - c.start) > 0.3) player.seekTo(c.start, true);
+  player.unMute();
+  player.setVolume(100);
+  if (player.getPlayerState() !== YT.PlayerState.PLAYING) player.playVideo();
+  setTimeout(hideCard, 60);
+  prepare(cur + 1);
+  paintPP();
+}
+
+function jump(i) {
+  if (!reel || i < 0) return;
+  if (i >= reel.clips.length) { finish(); return; }
+  goTo(i);
+}
+
+function toggle() {
+  if (state === "idle") return start(0);
+  if (state === "ended") return goTo(0);
+  if (state === "playing") {
+    player.pauseVideo(); state = "paused";
+    if (prep.rolling) {            // hold the pre-roll too, or it drifts past the cut
+      players[prep.slot].pauseVideo();
+      players[prep.slot].seekTo(prep.from, true);
+      prep.rolling = false;
+    }
+  }
+  else if (state === "paused") { player.playVideo(); state = "playing"; lastMove = performance.now(); }
+  paintPP();
+}
+
+// a timer, not requestAnimationFrame: rAF stops while the pane is hidden, which froze the reel
+function tick() {
+  if (!reel || !player || cur < 0) return;
+  const c = reel.clips[cur];
+  const now = performance.now();
+
+  if (state === "card") {
+    // once this clip is held at its cut point, start buffering the next one: a 2s sting
+    // otherwise ends before the next clip is ready
+    if (primed) prepare(cur + 1);
+    const late = now - loadStarted > 7000;   // never strand the viewer on black
+    if (primed || late) begin(c);
+    return;
+  }
+
+  const t = player.getCurrentTime ? player.getCurrentTime() : 0;
+  // the browser blocked playback with sound (autoplay without a click): ask for one click
+  // (a blocked player sits paused or unstarted; buffering or a slow seek is not a stall)
+  if (state === "playing") {
+    const ps = player.getPlayerState();
+    const blocked = ps === YT.PlayerState.PAUSED || ps === YT.PlayerState.CUED || ps === -1;
+    if (t !== lastT) { lastT = t; lastMove = now; }
+    else if ((blocked && now - lastMove > 2500) || now - lastMove > 8000) { stalled(); return; }
+  }
+  if (state === "playing") preroll(c, t);
+  if (state === "playing" && t >= c.end) {
+    cur + 1 < reel.clips.length ? goTo(cur + 1) : finish();
+    return;
+  }
+  paintProgress(Math.min(Math.max(t, c.start), c.end) - c.start);
+  paintCaption(t - c.start);
+}
+
+function stalled() {
+  state = "paused";
+  const card = $("#card");
+  card.className = "card on";
+  card.innerHTML = cur === 0
+    ? `<div class="k">Office hours</div><h2>“${esc(reel.question)}”</h2>
+       <button class="go" id="resume">${ICON.play} Play the answer</button>`
+    : `<div class="k">Paused</div><h2>${esc(reel.clips[cur].beat || reel.clips[cur].title)}</h2>
+       <button class="go" id="resume">${ICON.play} Continue</button>`;
+  $("#resume").onclick = () => goTo(cur);
+  paintPP();
+}
+
+function finish() {
+  state = "ended";
+  prep = { slot: -1, i: -1, primed: false };
+  players.forEach(p => p.pauseVideo());
+  const eps = [...new Map(reel.clips.map(c => [c.video, c])).values()];
+  const card = $("#card");
+  card.className = "card on";
+  card.innerHTML = `
+    <div class="k">That's the cut</div>
+    <h2>${reel.verdict ? esc(reel.verdict) : "Now go watch the full episodes."}</h2>
+    <div class="links">${eps.map(c => `<a href="https://www.youtube.com/watch?v=${c.video}" target="_blank" rel="noopener">↗ ${esc(c.title)} · ${esc(c.year)}</a>`).join("")}</div>
+    <div class="row"><button class="go" id="again">${ICON.replay} Play again</button></div>`;
+  $("#again").onclick = () => goTo(0);
+  $("#caption").classList.remove("on");
+  $("#banner").classList.remove("on");
+  paintPP(); paintList();
+  document.querySelectorAll("#segs button").forEach(b => { b.classList.remove("cur"); b.firstElementChild.style.width = "100%"; });
+}
+
+// ---------- paint ----------
+// beat banner over the top of the picture for the first few seconds of each answer clip;
+// the cold open runs clean
+let bannerFor = -1, bannerTimer = 0;
+function showBanner(i) {
+  if (bannerFor === i) return;
+  bannerFor = i;
+  clearTimeout(bannerTimer);
+  const c = reel.clips[i], b = $("#banner");
+  if (c.kind === "intro" || !c.beat) { b.classList.remove("on"); return; }
+  const pad = n => String(n).padStart(2, "0");
+  b.innerHTML = `<div class="k">${pad(i + 1)} / ${pad(reel.clips.length)}</div><b>${esc(c.beat)}</b>
+    <span>${c.speaker ? esc(c.speaker) + " · " : ""}${esc(c.title)} · ${esc(c.year)}</span>`;
+  b.classList.add("on");
+  bannerTimer = setTimeout(() => b.classList.remove("on"), 4500);
+}
+
+function hideCard() {
+  if (state !== "playing") return;
+  $("#card").className = "card";
+  $("#caption").classList.add("on");
+  showBanner(cur);
+}
+
+function paintList() {
+  document.querySelectorAll("#clips button").forEach((b, i) => b.classList.toggle("cur", i === cur));
+  document.querySelectorAll("#segs button").forEach((b, i) => {
+    b.classList.toggle("cur", i === cur);
+    b.firstElementChild.style.width = i < cur ? "100%" : i > cur ? "0" : b.firstElementChild.style.width;
+  });
+}
+
+function paintPP() { $("#pp").innerHTML = state === "playing" || state === "card" ? ICON.pause : ICON.play; }
+
+function paintProgress(rel) {
+  const c = reel.clips[cur];
+  const bar = $("#segs").children[cur];
+  if (bar) bar.firstElementChild.style.width = (100 * rel / (c.end - c.start)) + "%";
+  const before = reel.clips.slice(0, cur).reduce((a, x) => a + x.end - x.start, 0);
+  $("#time").textContent = fmt(before + rel) + " / " + fmt(reel.duration);
+}
+
+function paintCaption(rel) {
+  const c = reel.clips[cur];
+  let li = c.lines.findIndex((l, k) => rel < (c.lines[k + 1] ? c.lines[k + 1][0].t : 1e9));
+  if (li < 0) li = c.lines.length - 1;
+  const line = c.lines[li];
+  if (!line) return;
+  const said = line.filter(w => w.t <= rel).length;
+  const key = li * 1000 + said;
+  if (key === lastWordIdx) return;
+  lastWordIdx = key;
+  $("#caption").innerHTML = line.map((w, k) => `<span class="w${k < said ? " said" : ""}">${esc(w.w)}</span>`).join(" ");
+}
+
+boot();
+setInterval(tick, 40);
+</script>
+</body>
+</html>

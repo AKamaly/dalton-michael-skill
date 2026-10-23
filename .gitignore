@@ -1,0 +1,12 @@
+# built locally by `dm.py ingest`: YouTube captions are the videos' owners', not ours to redistribute
+data/captions/
+data/index.sqlite
+data/videos.json
+data/*.log
+data/RECORDING
+
+# your questions and reels
+player/reels/*.json
+
+__pycache__/
+.DS_Store
