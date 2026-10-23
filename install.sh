@@ -34,16 +34,34 @@ else
   git clone --quiet --depth 1 "$REPO" "$DEST"
 fi
 
-# 3. yt-dlp, which fetches the captions (text only, never video)
-if command -v yt-dlp >/dev/null || python3 -m yt_dlp --version >/dev/null 2>&1; then
-  say "yt-dlp found"
+# 3. yt-dlp, which fetches the captions (text only, never video). YouTube breaks old versions
+#    within months, and pip on an old Python can only install an old one, so: a recent copy
+#    already on PATH, else Homebrew, else yt-dlp's official standalone binary inside the skill.
+fresh() {  # yt-dlp versions are dates; "fresh" means under 120 days old
+  "$@" --version 2>/dev/null | python3 -c 'import sys, datetime
+v = sys.stdin.read().strip().split(".")
+try: age = (datetime.date.today() - datetime.date(int(v[0]), int(v[1]), int(v[2]))).days
+except Exception: sys.exit(1)
+sys.exit(0 if age < 120 else 1)'
+}
+if command -v yt-dlp >/dev/null && fresh yt-dlp; then
+  say "yt-dlp $(yt-dlp --version) found"
 elif command -v brew >/dev/null; then
-  say "Installing yt-dlp with Homebrew"
-  brew install --quiet yt-dlp
+  say "Installing the latest yt-dlp with Homebrew"
+  brew install --quiet yt-dlp 2>/dev/null || true
+  brew upgrade --quiet yt-dlp 2>/dev/null || true
 else
-  say "Installing yt-dlp with pip (user install)"
-  python3 -m pip install --user --quiet --upgrade yt-dlp \
-    || fail "Couldn't install yt-dlp. Install it yourself (https://github.com/yt-dlp/yt-dlp#installation), then run this again."
+  case "$(uname -s)/$(uname -m)" in
+    Darwin/*)        ASSET=yt-dlp_macos ;;
+    Linux/x86_64)    ASSET=yt-dlp_linux ;;
+    Linux/aarch64)   ASSET=yt-dlp_linux_aarch64 ;;
+    *) fail "Install yt-dlp yourself (https://github.com/yt-dlp/yt-dlp#installation), then run this again." ;;
+  esac
+  say "Downloading yt-dlp's standalone binary into the skill"
+  mkdir -p "$DEST/bin"
+  curl -fsSL -o "$DEST/bin/yt-dlp" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/$ASSET" \
+    || fail "Couldn't download yt-dlp. Install it yourself (https://github.com/yt-dlp/yt-dlp#installation), then run this again."
+  chmod +x "$DEST/bin/yt-dlp"
 fi
 
 # 4. The transcript index, built in the background

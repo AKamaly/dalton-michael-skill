@@ -54,7 +54,7 @@ It takes about a minute:
 
 1. Checks you have Python 3.9+ (nothing else to install from pip).
 2. Puts the skill in `~/.claude/skills/dalton-michael`, where Claude Code finds it.
-3. Installs [yt-dlp](https://github.com/yt-dlp/yt-dlp) if it's missing (Homebrew, or pip as a fallback). It fetches captions only, never video.
+3. Makes sure you have a recent [yt-dlp](https://github.com/yt-dlp/yt-dlp), through Homebrew or its official standalone download. It fetches captions only, never video.
 4. Starts building the transcript index in the background. It's searchable after about 5 minutes and complete in about 30, because YouTube rate-limits caption downloads.
 5. Opens a sample answer in your browser, so you can see it working right away.
 
@@ -92,7 +92,7 @@ python3 ~/.claude/skills/dalton-michael/scripts/dm.py doctor
 It checks Python, yt-dlp, the index and the player port, and prints the exact fix for anything missing. Claude runs it on its own when something fails. Common fixes:
 
 - **YouTube asks yt-dlp to "confirm you're not a bot".** Let yt-dlp use your browser's YouTube cookies: `export DM_COOKIES_FROM_BROWSER=chrome` (or `safari`, `firefox`), then run `ingest` again.
-- **Captions fail for a few videos.** YouTube rate-limits; run `ingest` again later and it retries only what's missing. Keeping yt-dlp current helps: `brew upgrade yt-dlp`.
+- **Captions fail.** YouTube breaks old versions of yt-dlp within a few months. Update it with `brew upgrade yt-dlp`, or run the installer again, then run `ingest` again; it only fetches what's missing.
 - **Port 8765 is taken.** `export DM_PORT=8766`.
 
 ### Update or remove

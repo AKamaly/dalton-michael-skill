@@ -159,16 +159,39 @@ def clean(text):
 
 # ---------- ingest ----------
 
+def find_ytdlp():
+    """(command, version) for the first working yt-dlp: the installer's standalone copy, PATH, pip module."""
+    local = ROOT / "bin" / "yt-dlp"
+    candidates = ([[str(local)]] if local.exists() else []) + \
+                 ([["yt-dlp"]] if shutil.which("yt-dlp") else []) + [[sys.executable, "-m", "yt_dlp"]]
+    for cmd in candidates:
+        r = subprocess.run(cmd + ["--version"], capture_output=True, text=True)
+        if r.returncode == 0:
+            return cmd, r.stdout.strip()
+    return None, None
+
+
+def ytdlp_age(version):
+    """Days since this yt-dlp release (versions are dates); YouTube breaks old ones within months."""
+    try:
+        y, m, d = (int(x) for x in version.split(".")[:3])
+        return (time.time() - time.mktime((y, m, d, 0, 0, 0, 0, 0, -1))) // 86400
+    except (ValueError, AttributeError):
+        return 0
+
+
+UPDATE_YTDLP = ("Update it: brew upgrade yt-dlp, or run the installer again:\n"
+                "curl -fsSL https://raw.githubusercontent.com/AKamaly/dalton-michael-skill/main/install.sh | bash")
+
+
 def ytdlp():
-    """yt-dlp as a command: the binary if it's on PATH, else the pip-installed module."""
-    if shutil.which("yt-dlp"):
-        cmd = ["yt-dlp"]
-    elif subprocess.run([sys.executable, "-m", "yt_dlp", "--version"], capture_output=True).returncode == 0:
-        cmd = [sys.executable, "-m", "yt_dlp"]
-    else:
-        sys.exit("yt-dlp isn't installed. Install it, then run ingest again:\n"
-                 "  brew install yt-dlp        (macOS)\n"
-                 "  python3 -m pip install --user yt-dlp   (anywhere)")
+    cmd, version = find_ytdlp()
+    if not cmd:
+        sys.exit("yt-dlp isn't installed. Run the installer, which sets it up:\n"
+                 "  curl -fsSL https://raw.githubusercontent.com/AKamaly/dalton-michael-skill/main/install.sh | bash")
+    if ytdlp_age(version) > 120:
+        print("Warning: yt-dlp %s is %d days old and YouTube may refuse it. %s"
+              % (version, ytdlp_age(version), UPDATE_YTDLP), flush=True)
     return cmd + (["--cookies-from-browser", COOKIES] if COOKIES else [])
 
 
@@ -225,6 +248,7 @@ def _ingest(limit):
     todo = [v for v in meta if not caption_file(v)][:limit]
     print("captions to fetch: %d (about %d min; YouTube rate-limits caption downloads)"
           % (len(todo), round(len(todo) * 9 / 60)), flush=True)
+    misses = 0
     for i, vid in enumerate(todo):
         for attempt in range(4):
             r = subprocess.run(
@@ -257,6 +281,13 @@ def _ingest(limit):
         ok = "ok" if caption_file(vid) else "MISSING"
         print("[%d/%d] %s %s  %s" % (i + 1, len(todo), vid, ok, meta[vid].get("title", "")), flush=True)
         save_meta(meta)
+        # three misses in a row means yt-dlp itself is failing: stop and say why, don't grind on
+        misses = 0 if caption_file(vid) else misses + 1
+        if misses >= 3:
+            err = ([l for l in r.stderr.splitlines() if "ERROR" in l] or ["(no error message)"])[-1]
+            sys.exit("Stopped: yt-dlp is failing on every video.\n  %s\nFixes:\n"
+                     "  - %s\n  - If YouTube asks you to sign in: export DM_COOKIES_FROM_BROWSER=chrome\n"
+                     "Then run ingest again; it resumes where it stopped." % (err, UPDATE_YTDLP.replace("\n", "\n    ")))
         if (i + 1) % 12 == 0:
             cmd_index([])        # searchable early; the full set lands at the end
         time.sleep(4)
@@ -610,9 +641,13 @@ def cmd_doctor(args):
         check(True, "SQLite full-text search (FTS5)")
     except sqlite3.Error:
         check(False, "SQLite full-text search (FTS5)", "Use a Python with FTS5, e.g. Homebrew's python3.")
-    has_ytdlp = bool(shutil.which("yt-dlp")) or subprocess.run(
-        [sys.executable, "-m", "yt_dlp", "--version"], capture_output=True).returncode == 0
-    check(has_ytdlp, "yt-dlp", "brew install yt-dlp    or    python3 -m pip install --user yt-dlp")
+    cmd, version = find_ytdlp()
+    if not cmd:
+        check(False, "yt-dlp", "Run the installer, which sets it up:\n"
+              "curl -fsSL https://raw.githubusercontent.com/AKamaly/dalton-michael-skill/main/install.sh | bash")
+    else:
+        check(ytdlp_age(version) <= 120, "yt-dlp %s" % version,
+              "It's %d days old and YouTube refuses old versions. %s" % (ytdlp_age(version), UPDATE_YTDLP))
 
     meta = load_meta()
     have = sum(1 for v in meta if caption_file(v))

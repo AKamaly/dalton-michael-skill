@@ -10,3 +10,6 @@ player/reels/*.json
 
 __pycache__/
 .DS_Store
+
+# installer's standalone yt-dlp
+bin/
