@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/icon.png" width="132" alt="Dalton + Michael pixel-art icon">
+</p>
+
 <h1 align="center">Dalton + Michael</h1>
 
 <p align="center">
@@ -9,7 +13,7 @@
   <a href="#install">Install</a> ·
   <a href="#usage">Usage</a> ·
   <a href="#how-it-works">How it works</a> ·
-  <a href="docs/demo.mp4">Demo with sound</a>
+  <a href="docs/demo.mp4">Download the demo</a>
 </p>
 
 <p align="center">
@@ -19,10 +23,9 @@
   <img src="https://img.shields.io/badge/license-MIT-444?style=flat-square" alt="MIT license">
 </p>
 
-<p align="center">
-  <img src="docs/demo.gif" width="100%" alt="Typing /dalton-michael Should I pivot my startup? in Claude Code, a reel of Dalton and Michael playing in the browser pane, then a pizza question answered with No.">
-</p>
-<p align="center"><sub>20-second preview. <a href="docs/demo.mp4">Watch the full 49-second demo with sound</a>.</sub></p>
+https://github.com/user-attachments/assets/83ccdd6e-124f-4325-97ef-ea5dd99ef03d
+
+<p align="center"><sub>49 seconds, sound on: "Should I pivot my startup?", then "is eating pizza gets me more customers?"</sub></p>
 
 ---
 
