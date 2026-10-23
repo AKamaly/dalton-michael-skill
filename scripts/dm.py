@@ -213,6 +213,9 @@ def list_source(url):
         parts = line.split("|")
         if len(parts) >= 3 and parts[1] != "NA":
             rows.append((parts[0], "|".join(parts[1:-1]), parts[-1]))
+    if not rows:
+        lines = r.stderr.strip().splitlines() or ["(no output)"]
+        print("  couldn't list %s: %s" % (url, next((l for l in reversed(lines) if "ERROR" in l or "error" in l), lines[-1])))
     return rows
 
 
@@ -284,7 +287,8 @@ def _ingest(limit):
         # three misses in a row means yt-dlp itself is failing: stop and say why, don't grind on
         misses = 0 if caption_file(vid) else misses + 1
         if misses >= 3:
-            err = ([l for l in r.stderr.splitlines() if "ERROR" in l] or ["(no error message)"])[-1]
+            lines = r.stderr.strip().splitlines() or ["(no output)"]
+            err = next((l for l in reversed(lines) if "ERROR" in l), lines[-1])
             sys.exit("Stopped: yt-dlp is failing on every video.\n  %s\nFixes:\n"
                      "  - %s\n  - If YouTube asks you to sign in: export DM_COOKIES_FROM_BROWSER=chrome\n"
                      "Then run ingest again; it resumes where it stopped." % (err, UPDATE_YTDLP.replace("\n", "\n    ")))
@@ -302,7 +306,7 @@ def _ingest(limit):
     cmd_index([])
     missing = [m.get("title", v) for v, m in meta.items() if not caption_file(v)]
     if missing:
-        print("%d videos still have no captions; run ingest again later to retry them." % len(missing))
+        print("%d videos not fetched yet; run ingest again to get them." % len(missing))
 
 
 # ---------- index ----------
